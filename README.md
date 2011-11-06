@@ -6,6 +6,8 @@ MangaViewer
 
 *MangaViewer is currently available in a Window binary (check the downloads) and as python source code.*
 
+**Windows exe: [https://github.com/msm595/MangaViewer/downloads]**
+
 ## Requirements
 If you are using the source code, the following is required:
     
