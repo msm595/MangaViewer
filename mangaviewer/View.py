@@ -251,7 +251,7 @@ class View(EventEmitter):
         self.root = root
 
         self.frame = Frame(self.root)
-        self.canvas = Canvas(self.frame,xscrollincrement=15,yscrollincrement=15,bg="#1f1f1f", highlightthickness=0)
+        self.canvas = Canvas(self.frame,xscrollincrement=1,yscrollincrement=1,bg="#1f1f1f", highlightthickness=0)
         scrolly = Scrollbar(self.frame, orient=VERTICAL, command=self.canvas.yview)
         
         self.canvas.configure(yscrollcommand=scrolly.set)
@@ -284,6 +284,8 @@ class View(EventEmitter):
 
         self.resizeTimeO = None
         self.mouseTimeO = self.root.after(1000, lambda x: x.frame.configure(cursor="none"), self)
+        self.scrollTimeO = None
+        self.scrollTo = {'ms':0,'steps':0,'dist':0,'step':0,'toGo':0,'absInc':0,'speed':0}
         #self.lastDir = os.path.abspath("C:\Users\Alex\Media\manga") TODO: remove
         #self.img = None
         self.imgId = None
@@ -318,8 +320,10 @@ class View(EventEmitter):
     def setTitle(self, *titles):
         '''Set the title preluded by the name of the app'''
         titles = list(titles)
-        titles.insert(0, Info.name)
-        titles.insert(1, '-')
+        #titles.insert(0, Info.name)
+        #titles.insert(1, '-')
+        titles.append("-")
+        titles.append(Info.name)
         self.setAbsTitle(*titles)
     
     def setAbsTitle(self, *titles):
@@ -338,18 +342,76 @@ class View(EventEmitter):
     
     def onMouseScroll(self, event):
         '''Scroll the canvas according to mouse wheel'''
-        if event.num == 4 or event.delta == 120:
-            self.canvas.yview("scroll", -3, "units")
+        go = 40
+        if event.delta != 0:
+            go *= abs(event.delta)/120
+        if event.num == 4 or event.delta > 0:
+            #self.canvas.yview("scroll", -3, "units")
+            self.scroll(-1*go)
         else:
-            self.canvas.yview("scroll", 3, "units")
+            #self.canvas.yview("scroll", 3, "units")
+            self.scroll(go)
     
     def onScroll(self, event):
         '''Scroll the canvas according to the key pressed'''
         if event.keysym == "Down":
-            self.canvas.yview("scroll", 1, "units")
+            #self.canvas.yview("scroll", 1, "units")
+            self.scroll(20)
         else:
-            self.canvas.yview("scroll", -1, "units")
+            #self.canvas.yview("scroll", -1, "units")
+            self.scroll(-20)
     
+    def scroll(self, speed):
+        #print speed
+        first, last = self.canvas.yview()
+        if (last == 1.0 and speed > 0) or (first == 0.0 and speed < 0):
+            self.scrollTo = {'ms':0,'steps':0,'dist':0,'step':0,'toGo':0,'absInc':0,'speed':0}
+            return
+
+        #self.scrollTo['ms']/=2
+        self.scrollTo['ms']=100
+
+        #self.scrollTo['steps']/=2
+        self.scrollTo['steps']=5
+
+        self.scrollTo['step'] = self.scrollTo['ms'] / self.scrollTo['steps']
+
+        self.scrollTo['speed'] /= 10
+        self.scrollTo['speed'] *= 9
+        self.scrollTo['speed'] += speed
+        #print(self.scrollTo['speed'])
+        self.scrollTo['dist'] = self.scrollTo['speed'] / self.scrollTo['steps']
+
+        ms = 100
+        steps = 5
+        inc = ms/steps
+        dist = speed / inc
+
+        #self.scrollTo['dist'] = self.scrollTo['dist']/2 + dist
+
+        self.scrollTo['toGo'] = abs(self.scrollTo['dist'] * self.scrollTo['steps'])
+        self.scrollTo['absInc'] = abs(self.scrollTo['dist'])
+        #print (self.scrollTo)
+
+        #ob = {'d':self.scrollTo['dist'], 't':toGo, 'm':minu, 'i':self.scrollTo['step']}
+        #cSize = self.getCanvasSize()
+        #rectdem = (cSize[0]-20,10,cSize[0]-10,cSize[1]-10)
+
+        #self.canvas.create_rectangle(rectdem)
+
+        def c(x):
+            x.canvas.yview('scroll', x.scrollTo['dist'], 'units')
+            x.scrollTo['ms']-= self.scrollTo['step']
+            x.scrollTo['toGo'] -= x.scrollTo['absInc']
+            if x.scrollTo['toGo'] > 0:
+                x.scrollTimeO = x.root.after(self.scrollTo['step'], c, x)
+            else:
+                x.scrollTimeO = None
+                x.scrollTo = {'ms':0,'steps':0,'dist':0,'step':0,'toGo':0,'absInc':0,'speed':0}
+    
+        if self.scrollTimeO == None:
+            self.root.after(self.scrollTo['step'], c, self)
+
     def getCanvasSize(self):
         return (self.canvas.winfo_width(), self.canvas.winfo_height())
     
@@ -369,16 +431,15 @@ class View(EventEmitter):
         if pos == "center":
             x = (canvasSize[0] - img.size[0])/2
             y = (canvasSize[1] - img.size[1])/2
-            #x = max(x, 0)
-            #y = max(y, 0)
+            x = max(x, 0)
+            y = max(y, 0)
         else: #no other positioning features have been implemented
             x = 0
             y = 0
         
         self.imgId = self.canvas.create_image(x,y, image=img.tkpi, anchor="nw")
-        bbox = self.canvas.bbox(ALL)
-        nbbox = (0,0, bbox[2], max(bbox[3], canvasSize[1]))
+        tbbox = (0,0,img.size[0],img.size[1])
         self.canvas.yview("moveto", 0.0)
-        self.canvas.configure(scrollregion=nbbox)
+        self.canvas.configure(scrollregion=tbbox)
 
         self.setTitle(img.folderName+"/"+img.fileName, "("+str(num+1)+"/"+str(total)+")")
